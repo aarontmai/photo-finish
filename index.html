@@ -92,12 +92,13 @@ input{font:inherit;font-size:16px;background:var(--ink);color:var(--cream);borde
 .tk.used{opacity:.2}
 .hostbar{display:flex;gap:8px;margin-top:8px}
 .code{font-family:Fraunces,serif;font-size:38px;font-weight:900;letter-spacing:6px;color:var(--gold);margin:4px 0}
+.mbtn{padding:4px 8px;font-size:15px;border-radius:99px;line-height:1}
 .toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:var(--cream);color:var(--ink);padding:8px 14px;border-radius:99px;font-weight:700;font-size:13px;z-index:9;transition:opacity .3s}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header><h1>Jockey Gambling <span>Club</span></h1><div id="pill" class="pill">JGC</div></header>
+  <header><h1>Jockey Gambling <span>Club</span></h1><div class="row" style="gap:6px"><button id="musicBtn" class="mbtn" aria-label="Toggle music">🔊</button><div id="pill" class="pill">JGC</div></div></header>
   <div id="joinCard" class="card hide">
     <h2 style="margin-top:0">Your name</h2>
     <div class="row"><input id="nick" maxlength="12" placeholder="Name" autocomplete="off"><button class="primary" id="joinBtn">Join</button></div>
@@ -558,6 +559,57 @@ function renderDock(){
   $('dockIn').innerHTML=`<div class="dtop"><span><span class="sw" style="background:${p.col}"></span>${esc(p.nick)} · <span class="cash ${p.cash<0?'neg':''}">${money(p.cash)}</span></span><span>${bettingOpen()?(selTok!==null?`Next drop: ${tokensFor(myId)[selTok]}-token`:'All tokens placed'):'Betting closed'}</span></div>
   <div class="toks">${tokensFor(myId).map((v,i)=>`<button class="tk ${used.has(i)?'used':''} ${i===selTok?'sel':''}" style="background:${p.col}" ${used.has(i)?'disabled':''} onclick="pickTok(${i})">${v}</button>`).join('')}</div>`;
 }
+
+// ================= Music: William Tell Overture finale gallop (Rossini, 1829 — public domain) =================
+// A small synthesized arrangement played with Web Audio. Browsers only allow sound after a tap,
+// so it starts on the first touch anywhere and the 🔊 button mutes it.
+const Music=(()=>{
+  let ctx=null,master=null,timer=null,next=0,step=0,on=true;
+  try{on=localStorage.getItem('pf_music')!=='off'}catch(e){}
+  const S=0.072;                                    // seconds per 16th note (a brisk gallop)
+  const R=[1,1,2,1,1,2,1,1,2,2,2];                  // da-da-DUM da-da-DUM da-da-DUM DUM DUM
+  const P=[[67,67,67,67,67,67,67,67,72,74,76],[67,67,67,67,67,67,67,67,76,72,67],
+           [67,67,67,67,67,67,67,67,72,74,76],[76,76,76,74,74,74,72,72,71,74,72],
+           [76,76,76,76,76,76,76,76,77,79,81],[79,79,79,77,77,77,76,76,74,72,71],
+           [67,67,67,67,67,67,67,67,72,74,76],[76,76,76,74,74,74,72,72,71,74,72]];
+  const CH=[[48,55],[48,55],[48,55],[43,50],[48,55],[43,50],[48,55],[41,48],[48,55],[48,55],[48,55],[43,50],[48,55],[43,50],[43,50],[48,55]];
+  const mel=[];P.forEach(ph=>{ph.forEach((n,i)=>mel.push([n,R[i]]));});
+  const evs=[];let t=0;mel.forEach(([n,d])=>{evs.push({t,n,d});t+=d;});
+  const LOOP=t; // 128 sixteenths
+  const hz=n=>440*Math.pow(2,(n-69)/12);
+  function tone(n,at,dur,type,vol){const o=ctx.createOscillator(),g=ctx.createGain();o.type=type;o.frequency.value=hz(n);
+    g.gain.setValueAtTime(0,at);g.gain.linearRampToValueAtTime(vol,at+0.008);g.gain.exponentialRampToValueAtTime(0.0008,at+dur);
+    o.connect(g);g.connect(master);o.start(at);o.stop(at+dur+0.02);}
+  let noiseBuf=null;
+  function hat(at,vol){if(!noiseBuf){noiseBuf=ctx.createBuffer(1,ctx.sampleRate*0.05,ctx.sampleRate);const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;}
+    const src=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();src.buffer=noiseBuf;f.type='highpass';f.frequency.value=6000;
+    g.gain.setValueAtTime(vol,at);g.gain.exponentialRampToValueAtTime(0.0005,at+0.04);src.connect(f);f.connect(g);g.connect(master);src.start(at);}
+  function schedule(){
+    while(next<ctx.currentTime+0.25){
+      const pos=step%LOOP;
+      evs.filter(e=>e.t===pos).forEach(e=>{tone(e.n,next,e.d*S*0.9,'square',0.05);tone(e.n-12,next,e.d*S*0.9,'triangle',0.06);});
+      if(pos%2===0){const bar=Math.floor(pos/8)%CH.length,ch=CH[bar];tone(pos%4===0?ch[0]:ch[1],next,S*1.6,'triangle',pos%4===0?0.14:0.09);}
+      if(pos%2===1)hat(next,0.03);
+      next+=S;step++;
+    }
+  }
+  function start(){
+    if(!on)return;
+    try{
+      if(!ctx){ctx=new (window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.gain.value=0.5;master.connect(ctx.destination);}
+      if(ctx.state==='suspended')ctx.resume();
+      if(!timer){next=ctx.currentTime+0.05;timer=setInterval(schedule,60);}
+    }catch(e){}
+  }
+  function stop(){clearInterval(timer);timer=null;if(ctx)try{ctx.suspend()}catch(e){}}
+  function toggle(){on=!on;try{localStorage.setItem('pf_music',on?'on':'off')}catch(e){}if(on)start();else stop();btn();}
+  function btn(){const b=document.getElementById('musicBtn');if(b)b.textContent=on?'🔊':'🔇';}
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();else if(on&&ctx)start();});
+  return{start,toggle,btn};
+})();
+$('musicBtn').onclick=e=>{e.stopPropagation();Music.toggle();};
+Music.btn();
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,()=>Music.start(),{passive:true}));
 
 // ================= Boot =================
 $('joinBtn').onclick=join;$('nick').addEventListener('keydown',e=>{if(e.key==='Enter')join();});
