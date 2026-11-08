@@ -114,7 +114,7 @@ const DIST=Array(9).fill(10);            // every horse runs the same 10-space t
 const HALF=i=>Math.ceil(DIST[i]/2);      // betting closes when any horse reaches the red line
 const LATE=i=>Math.ceil(DIST[i]*0.8);    // Late Bird perk: still betting until this line
 const TOKENS=[2,3,3,4,5];                // each player's betting tokens, every race
-const STEP=1600, STEP_FAST=800;          // slow rolls while bets are open, quicker once betting closes                         // ms between rolls
+const STEP=1280, STEP_FAST=640;          // slow rolls while bets are open, quicker once betting closes                         // ms between rolls
 const PCOL=['#e8b54a','#5ad1e8','#ff8fb1','#b4e86b','#c89bff','#ff9f5a','#7fe0c0','#f2f2f2'];
 const COLS={w:'Win',p:'Place',s:'Show'},TOPN={w:1,p:2,s:3};
 const GROUPS={L:{label:'Low',hs:[0,1,2]},M:{label:'Mid',hs:[3,4,5]},X:{label:'High',hs:[6,7,8]}};
@@ -222,7 +222,7 @@ let myNick='';try{myNick=localStorage.getItem('pf_nick')||''}catch(e){}
 let G=null,online={},selTok=null;
 
 const me=()=>G&&G.roster&&G.roster[myId];
-let pendingToks=new Set(); // my taps the host hasn't confirmed yet
+let pendingToks=new Set(),pendingSq={}; // my taps the host hasn't confirmed yet
 const usedToks=id=>{const u=new Set(Object.values(G.claims||{}).filter(c=>c.id===id).map(c=>c.ti));if(id===myId)pendingToks.forEach(t=>u.add(t));return u;};
 const bettingOpen=(id=myId)=>G&&(G.phase==='bet'||(G.phase==='race'&&(G.open||(G.open2&&perkOf(id)==='late'))));
 
@@ -358,8 +358,10 @@ function tapSquare(sq){
   if(c){if(c.id===myId&&G.phase==='bet')send({type:'unclaim',sq});return;}
   if(!bettingOpen())return toast('Betting is closed');
   if(selTok===null||usedToks(myId).has(selTok)){const free=tokensFor(myId).map((v,i)=>i).filter(i=>!usedToks(myId).has(i));if(!free.length)return toast('All your tokens are out');selTok=free[free.length-1];}
-  send({type:'claim',sq,ti:selTok});pendingToks.add(selTok);
+  const ti=selTok;
+  if(!isHost){pendingToks.add(ti);pendingSq[sq]=ti;}
   const left=tokensFor(myId).map((v,i)=>i).filter(i=>!usedToks(myId).has(i));selTok=left.length?left[left.length-1]:null;
+  send({type:'claim',sq,ti});render();
 }
 function pickTok(i){selTok=i;renderDock();}
 function join(){const v=$('nick').value.trim().slice(0,12);if(!v)return;myNick=v;try{localStorage.setItem('pf_nick',v)}catch(e){}send({type:'nick',nick:v});render();}
@@ -414,9 +416,9 @@ function connectHost(){
   const c=peerObj.connect(PFX+code,{reliable:true});hostConn=c;
   c.on('open',()=>{netMsg='';c.send({type:'hello',pid:myId,nick:myNick});render();});
   c.on('data',m=>{if(!m||typeof m!=='object')return;
-    if(m.type==='state'){const ng=m.G?clone(m.G):null;if(!ng||!G||ng.race!==G.race||ng.game!==G.game)pendingToks.clear();G=ng;if(G){const mine=new Set(Object.values(G.claims||{}).filter(c=>c.id===myId).map(c=>c.ti));pendingToks.forEach(t=>{if(mine.has(t))pendingToks.delete(t);});}render();}
+    if(m.type==='state'){const ng=m.G?clone(m.G):null;if(!ng||!G||ng.race!==G.race||ng.game!==G.game){pendingToks.clear();pendingSq={};}G=ng;if(G){const mine=new Set(Object.values(G.claims||{}).filter(c=>c.id===myId).map(c=>c.ti));pendingToks.forEach(t=>{if(mine.has(t))pendingToks.delete(t);});for(const q in pendingSq)if(G.claims[q])delete pendingSq[q];}render();}
     if(m.type==='online'&&Array.isArray(m.ids)){online={};m.ids.forEach(i=>online[i]=true);render();}
-    if(m.type==='err'){pendingToks.clear();render();toast(String(m.msg).slice(0,60));}});
+    if(m.type==='err'){pendingToks.clear();pendingSq={};render();toast(String(m.msg).slice(0,60));}});
   c.on('close',()=>{if(hostConn===c){netMsg='Reconnecting…';render();scheduleRetry(2000);}});
 }
 function startPlayer(c){
@@ -437,21 +439,23 @@ function render(){
   const showJoin=G&&role&&(!myNick||!me())&&G.phase!=='final';
   $('joinCard').classList.toggle('hide',!showJoin);
   if(showJoin&&!$('nick').value&&document.activeElement!==$('nick'))$('nick').value=myNick;
-  $('main').innerHTML=view();renderDock();
+  const v=view(),parts=Array.isArray(v)?v:[v],m=$('main');
+  while(m.children.length>parts.length)m.lastChild.remove();
+  parts.forEach((h,i)=>{let el=m.children[i];if(!el){el=document.createElement('div');m.appendChild(el);}if(el._h!==h){el.innerHTML=h;el._h=h;}});
+  renderDock();
 }
 function view(){
   if(!role)return homeHTML();
   if(!G)return `<div class="card center note">${esc(netMsg||'Connecting…')}</div>`;
-  let out=netMsg?`<div class="banner closed">${esc(netMsg)}</div>`:'';
-  out+=hostBar();
-  if(G.phase==='lobby')return out+lobbyHTML();
-  if(G.phase==='final')return out+finalHTML();
-  out+=trackHTML();
-  out+=perkHTML();
-  if(G.phase==='bet')out+=`<div class="banner open">Betting open. Tap a square to drop a token${me()?'. Tap your own token to take it back before the start':''}.</div>`;
-  if(G.phase==='race')out+=G.open?`<div class="banner open">🟢 Betting still open, closes when a horse crosses the red line</div>`:`<div class="banner closed">🔒 Betting closed${G.open2&&Object.values(G.perks||{}).includes('late')?' (🐦 Late Birds can still bet)':''}</div>`;
-  if(G.phase==='results')out+=resultsHTML();
-  return out+boardHTML()+playersHTML();
+  const out=[netMsg?`<div class="banner closed">${esc(netMsg)}</div>`:'',hostBar()];
+  if(G.phase==='lobby')return out.concat([lobbyHTML()]);
+  if(G.phase==='final')return out.concat([finalHTML()]);
+  out.push(trackHTML(),perkHTML());
+  if(G.phase==='bet')out.push(`<div class="banner open">Betting open. Tap a square to drop a token${me()?'. Tap your own token to take it back before the start':''}.</div>`);
+  if(G.phase==='race')out.push(G.open?`<div class="banner open">🟢 Betting still open, closes when a horse crosses the red line</div>`:`<div class="banner closed">🔒 Betting closed${G.open2&&Object.values(G.perks||{}).includes('late')?' (🐦 Late Birds can still bet)':''}</div>`);
+  if(G.phase==='results')out.push(resultsHTML());
+  out.push(boardHTML(),playersHTML());
+  return out;
 }
 function hostBar(){
   if(!isHost)return '';
@@ -477,6 +481,8 @@ function sqHTML(id){
   const b=G.board[id],c=G.claims[id],R=G.results;
   const st=R?(R.hit.includes(id)?'hit':'miss'):'';
   const can=!c&&bettingOpen()&&me();
+  const gh=!c&&pendingSq[id]!=null&&me();
+  if(gh)return `<div class="sq taken"><div class="tok" style="background:${me().col};opacity:.6"><b>${tokensFor(myId)[pendingSq[id]]}</b><i>…</i></div></div>`;
   let inner=c?(()=>{const p=G.roster[c.id]||{nick:'?',col:'#888'};return `<div class="tok" style="background:${p.col}"><b>${c.v}</b><i>${esc(p.nick)}</i></div>`})():`<div class="m">×${b.m}</div>${b.pen?`<div class="pen">−$${b.pen}</div>`:''}`;
   return `<div class="sq ${c?'taken':''} ${can?'can':''} ${st}" onclick="tapSquare('${id}')">${inner}</div>`;
 }
