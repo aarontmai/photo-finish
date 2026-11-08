@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Photo Finish: Dice Derby</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f2a1d;--felt:#16402b;--felt2:#1d5136;--cream:#f6efdc;--gold:#e8b54a;--ink:#0b1a12;--muted:#a9c2b3;--line:rgba(246,239,220,.14)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg)}
+body{background:radial-gradient(ellipse at top,#1b4a33,var(--bg) 70%) fixed;color:var(--cream);font-family:Inter,system-ui,sans-serif;min-height:100vh;-webkit-tap-highlight-color:transparent;font-size:15px}
+.wrap{max-width:640px;margin:0 auto;padding:12px 12px 120px}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+h1{font-family:Fraunces,serif;font-weight:900;font-size:26px;letter-spacing:-.5px;line-height:1}
+h1 span{color:var(--gold)}
+h2{font-family:Fraunces,serif;font-size:18px;margin:14px 0 8px}
+.pill{font-size:12px;background:rgba(232,181,74,.15);color:var(--gold);padding:5px 10px;border-radius:99px;font-weight:700;white-space:nowrap}
+.card{background:var(--felt);border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:10px}
+button{font:inherit;cursor:pointer;border-radius:10px;padding:11px 12px;font-weight:700;background:var(--felt2);color:var(--cream);border:1px solid var(--line);touch-action:manipulation}
+button:active{transform:scale(.97)}
+button.primary{background:var(--gold);color:var(--ink);border-color:transparent}
+button.danger{background:transparent;color:#f3a6a3;border-color:rgba(217,83,79,.4);padding:5px 10px;font-size:13px}
+button.sel{background:var(--cream);color:var(--ink)}
+button:disabled{opacity:.4;cursor:not-allowed}
+input{font:inherit;font-size:16px;background:var(--ink);color:var(--cream);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+.row{display:flex;gap:8px;align-items:center}
+.grow{flex:1}
+.note{font-size:13px;color:var(--muted);line-height:1.5}
+/* track */
+.track{display:flex;flex-direction:column;gap:4px}
+.lane{display:grid;grid-template-columns:40px 1fr 40px;gap:6px;align-items:center}
+.lab{font-family:Fraunces,serif;font-weight:900;font-size:14px;text-align:center;border-radius:7px;padding:4px 0;color:var(--ink)}
+.cells{display:flex;gap:3px;height:24px}
+.cell{flex:1;border-radius:5px;background:rgba(246,239,220,.07);position:relative}
+.cell.fin{background:repeating-conic-gradient(#f6efdc 0 25%,#0b1a12 0 50%) 0 0/8px 8px;opacity:.5}
+.cell.on{background:rgba(246,239,220,.2)}
+.horse{position:absolute;inset:0;display:grid;place-items:center;font-size:16px}
+.odds{font-size:12px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.lane.hot .lab{box-shadow:0 0 0 3px var(--cream)}
+.lane.first .lab{box-shadow:0 0 0 3px var(--gold)}
+.dice{display:flex;gap:8px;justify-content:center;align-items:center;margin:4px 0 10px;min-height:42px}
+.die{width:38px;height:38px;background:var(--cream);color:var(--ink);border-radius:9px;display:grid;place-items:center;font-family:Fraunces,serif;font-weight:900;font-size:20px;box-shadow:0 3px 0 #c9bf9f}
+.sum{font-family:Fraunces,serif;font-size:20px;color:var(--gold);min-width:50px;text-align:center}
+.status{text-align:center;font-weight:700;font-size:14px;color:var(--muted)}
+/* betting */
+.seg{display:flex;gap:6px;margin-bottom:8px}
+.seg button{flex:1;padding:9px 4px}
+.hgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.hbtn{padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;border-width:2px}
+.hbtn b{font-family:Fraunces,serif;font-size:18px}
+.hbtn small{font-size:12px;opacity:.85;font-weight:600}
+.bet{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px;gap:8px}
+.bet:last-child{border-bottom:none}
+.tag{font-size:11px;padding:2px 7px;border-radius:99px;background:rgba(217,83,79,.25);color:#ffc2bf;margin-left:4px}
+.win{color:#9be3a8}.lose{color:#f3a6a3}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td{padding:7px 4px;border-bottom:1px solid var(--line)}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+.me{color:var(--gold);font-weight:700}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#9be3a8;margin-right:6px}
+.dot.off{background:#667}
+.banner{background:linear-gradient(90deg,#7a1f1c,#a8322d);border-radius:12px;padding:10px 12px;margin-top:10px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.dock{position:fixed;left:0;right:0;bottom:0;background:rgba(11,26,18,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+.dock .in{max-width:640px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.chips{font-family:Fraunces,serif;font-size:22px;font-weight:900;color:var(--gold)}
+.chips small{font-family:Inter;font-size:11px;color:var(--muted);display:block;font-weight:600}
+.hide{display:none!important}
+.center{text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Photo <span>Finish</span></h1><div id="pill" class="pill">Connecting…</div></header>
+  <div id="joinCard" class="card hide">
+    <h2 style="margin-top:0">Pick a name</h2>
+    <div class="row"><input id="nick" maxlength="14" placeholder="Your name" autocomplete="off"><button class="primary" id="joinBtn">Join</button></div>
+    <div class="note" style="margin-top:8px">Everyone starts with 100 play chips. No real money, just bragging rights.</div>
+  </div>
+  <div id="main"></div>
+</div>
+<div class="dock hide" id="dock"><div class="in" id="dockIn"></div></div>
+
+<script>
+// ===== Game constants =====
+const H=[{k:'2·3',c:'#e05a5a'},{k:'4',c:'#f08a3c'},{k:'5',c:'#efc94c'},{k:'6',c:'#8fd16b'},{k:'7',c:'#4cc9b0'},{k:'8',c:'#5aa7e0'},{k:'9',c:'#8b7fe8'},{k:'10',c:'#d07ad6'},{k:'11·12',c:'#f2a7c3'}];
+const DIST=[6,6,7,7,7,7,7,6,6];   // spaces to finish (tuned so 7 is the favourite, long shots ~5%)
+const EDGE=0.9, STEP=650, LIVE_MS=20000, START_CHIPS=100;
+const TYPES={win:'Win',place:'Place',show:'Show'}, TOPN={win:1,place:2,show:3};
+const horseOf=s=>s<=3?0:s>=11?8:s-3;
+const d6=()=>1+Math.floor(Math.random()*6);
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+// ===== Runtime =====
+let role=null,isHost=false,myId=null,myPeer=null,peerObj=null,hostConn=null,code=null,netMsg='';
+const PFX='photofinish-dd-',conns={},seats={};
+try{myId=localStorage.getItem('pf_pid')}catch(e){}
+if(!myId){myId=Math.random().toString(36).slice(2,12);try{localStorage.setItem('pf_pid',myId)}catch(e){}}
+let G=null;                 // shared game state (db doc live/state, written by host only)
+let peers=[];               // room peers (players' bets travel in presence)
+const recv={};              // local receipt time per phase, for synced animation
+let my={nick:'',game:null,race:null,bets:[]};
+let ui={type:'win',amt:10};
+try{my.nick=localStorage.getItem('pf_nick')||''}catch(e){}
+
+// ===== Odds by Monte Carlo from current positions =====
+function simOdds(pos,n=5000){
+  const c={win:Array(9).fill(0),place:Array(9).fill(0),show:Array(9).fill(0)};
+  for(let t=0;t<n;t++){
+    const p=pos.slice();
+    while(true){const h=horseOf(d6()+d6());p[h]++;if(p[h]>=DIST[h])break;}
+    const rk=[...Array(9).keys()].map(i=>[i,p[i]/DIST[i]+Math.random()*1e-6]).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+    c.win[rk[0]]++;c.place[rk[0]]++;c.place[rk[1]]++;rk.slice(0,3).forEach(i=>c.show[i]++);
+  }
+  const o={};for(const t in c)o[t]=c[t].map(v=>Math.min(50,Math.max(1.1,Math.floor(EDGE/Math.max(v/n,0.002)*10)/10)));
+  return o;
+}
+function replay(rolls){
+  const pos=Array(9).fill(0),stamp=Array(9).fill(0);let last=null;
+  rolls.forEach((r,i)=>{const a=Math.floor(r/10),b=r%10,h=horseOf(a+b);pos[h]=Math.min(DIST[h],pos[h]+1);stamp[h]=i+1;last=[a,b];});
+  return{pos,stamp,last};
+}
+const rankOf=(pos,stamp)=>[...Array(9).keys()].sort((a,b)=>(pos[b]/DIST[b]-pos[a]/DIST[a])||(stamp[a]-stamp[b]));
+const phaseKey=()=>G?`${G.game}:${G.race}:${G.phase}`:'';
+
+// What's on the track right now, animated from when this device received the phase
+function visibleRolls(){
+  if(!G)return[];
+  const r1=G.rolls1||[],r2=G.rolls2||[];
+  const n=len=>Math.min(len,Math.floor((Date.now()-(recv[phaseKey()]||Date.now()))/STEP)+1);
+  if(G.phase==='race')return r1.slice(0,n(r1.length));
+  if(G.phase==='live')return r1;
+  if(G.phase==='race2')return r1.concat(r2.slice(0,n(r2.length)));
+  if(G.phase==='results')return r1.concat(r2);
+  return[];
+}
+
+// ===== Identity helpers =====
+const pid=p=>p.by||p.peer;
+const me=()=>myId||myPeer;
+const inRoster=()=>G&&G.roster&&G.roster[me()];
+const myChips=()=>inRoster()?G.roster[me()].chips:0;
+const window_=()=>G&&(G.phase==='bet'||G.phase==='live')?(G.phase==='live'):null; // false=pre, true=live
+const stakedNow=()=>my.bets.filter(b=>b.l===window_()).reduce((s,b)=>s+b.a,0);
+function online(id){return peers.some(p=>pid(p)===id&&p.online!==false);}
+
+function pushPresence(){
+  const pr={nick:my.nick||null,game:my.game,race:my.race,bets:my.bets};
+  if(role==='host'){seats[myId]={presence:pr,online:true};publishPeers();}
+  else if(hostConn&&hostConn.open){try{hostConn.send({type:'pres',presence:pr})}catch(e){}}
+}
+
+// ===== Host: authoritative game engine =====
+function hostWrite(next){
+  G=next;
+  try{localStorage.setItem('pf_host',JSON.stringify({code,G}))}catch(e){}
+  broadcast({type:'state',G});
+  onState();
+}
+const clone=o=>JSON.parse(JSON.stringify(o));
+function hostNewGame(races){
+  hostWrite({game:Math.random().toString(36).slice(2,8),phase:'lobby',races:races||(G&&G.races)||4,race:0,roster:{},rolls1:[],rolls2:[],frozen:[],results:null,t:Date.now()});
+}
+function hostSync(){ // seat new players while betting is open
+  if(!isHost||!G||!['lobby','bet','results'].includes(G.phase))return;
+  let changed=false;const s=clone(G);
+  peers.forEach(p=>{const pr=p.presence||{};if(pr.game!==G.game||!pr.nick)return;const id=pid(p);const nick=String(pr.nick).slice(0,14);
+    if(!s.roster[id]){s.roster[id]={nick,chips:START_CHIPS};changed=true;}
+    else if(s.roster[id].nick!==nick){s.roster[id].nick=nick;changed=true;}});
+  if(changed)hostWrite(s);
+}
+function hostOpenBetting(){const s=clone(G);s.race++;s.phase='bet';s.oddsPre=simOdds(Array(9).fill(0),8000);s.oddsLive=null;s.rolls1=[];s.rolls2=[];s.frozen=[];s.results=null;s.t=Date.now();hostWrite(s);}
+function freezeBets(s,live){ // take each player's tickets from their presence, validate, deduct chips
+  const odds=live?s.oddsLive:s.oddsPre;
+  peers.forEach(p=>{const pr=p.presence||{},id=pid(p);
+    if(pr.game!==s.game||pr.race!==s.race||!s.roster[id]||!Array.isArray(pr.bets))return;
+    if(s.frozen.some(f=>f.id===id&&f.l===live))return; // one tab per player
+    pr.bets.filter(b=>b&&b.l===live).slice(0,30).forEach(b=>{
+      const h=b.h|0,t=b.t,a=Math.floor(+b.a);if(!(h>=0&&h<9)||!TYPES[t]||!(a>0))return;
+      if(a>s.roster[id].chips)return;
+      s.roster[id].chips-=a;s.frozen.push({id,h,t,a,m:odds[t][h],l:live});
+    });});
+}
+let hostTimer=null;
+function hostStartRace(){
+  const s=clone(G);freezeBets(s,false);
+  const rolls=[],pos=Array(9).fill(0);
+  while(true){const a=d6(),b=d6(),h=horseOf(a+b);rolls.push(a*10+b);pos[h]++;if(Math.max(...pos.map((v,i)=>v/DIST[i]))>=0.5)break;}
+  s.rolls1=rolls;s.oddsLive=simOdds(pos);s.phase='race';s.t=Date.now();hostWrite(s);
+  clearTimeout(hostTimer);hostTimer=setTimeout(hostGoLive,rolls.length*STEP+900);
+}
+function hostGoLive(){if(G.phase!=='race')return;const s=clone(G);s.phase='live';s.liveEnds=Date.now()+LIVE_MS;hostWrite(s);clearTimeout(hostTimer);hostTimer=setTimeout(hostResume,LIVE_MS);}
+function hostResume(){
+  if(G.phase!=='live')return;const s=clone(G);freezeBets(s,true);
+  const pos=replay(s.rolls1).pos,rolls=[];
+  while(true){const a=d6(),b=d6(),h=horseOf(a+b);rolls.push(a*10+b);pos[h]++;if(pos[h]>=DIST[h])break;}
+  s.rolls2=rolls;s.phase='race2';s.t=Date.now();hostWrite(s);
+  clearTimeout(hostTimer);hostTimer=setTimeout(hostSettle,rolls.length*STEP+1200);
+}
+function hostSettle(){
+  if(G.phase!=='race2')return;const s=clone(G);
+  const {pos,stamp}=replay(s.rolls1.concat(s.rolls2));const rk=rankOf(pos,stamp);
+  s.results={rank:rk.slice(0,3),lines:s.frozen.map(f=>{const hit=rk.slice(0,TOPN[f.t]).includes(f.h);const pay=hit?Math.round(f.a*f.m):0;s.roster[f.id].chips+=pay;return{...f,pay};})};
+  s.phase='results';s.t=Date.now();hostWrite(s);
+}
+function hostNext(){if(G.race>=G.races){const s=clone(G);s.phase='final';hostWrite(s);}else hostOpenBetting();}
+function hostRecover(){ // host reloaded mid-race: pick the timers back up
+  clearTimeout(hostTimer);
+  if(G.phase==='race')hostTimer=setTimeout(hostGoLive,1500);
+  if(G.phase==='live')hostTimer=setTimeout(hostResume,Math.max(1500,(G.liveEnds||0)-Date.now()));
+  if(G.phase==='race2')hostTimer=setTimeout(hostSettle,1500);
+}
+
+// ===== Player actions =====
+function placeBet(h){
+  const w=window_();if(w===null)return;
+  const left=myChips()-stakedNow();const a=ui.amt==='all'?left:Math.min(ui.amt,left);if(a<=0)return;
+  const odds=w?G.oddsLive:G.oddsPre;
+  my.bets.push({h,t:ui.type,a,m:odds[ui.type][h],l:w});pushPresence();render();
+}
+function undoBet(i){my.bets.splice(i,1);pushPresence();render();}
+function join(){
+  const v=$('nick').value.trim().slice(0,14);if(!v)return;my.nick=v;
+  try{localStorage.setItem('pf_nick',v)}catch(e){}
+  pushPresence();render();
+}
+
+// ===== State arrival =====
+let lastKey='';
+function onState(){
+  if(G){const k=phaseKey();if(!recv[k])recv[k]=Date.now();
+    if(k!==lastKey){lastKey=k;}
+    if(my.game!==G.game||my.race!==G.race){my.game=G.game;my.race=G.race;my.bets=[];pushPresence();}
+  }
+  render();
+}
+
+// ===== Render =====
+function render(){
+  $('pill').textContent=role&&code&&(!G||G.phase==='lobby')?'Table '+code:!G?'Lobby':G.phase==='lobby'?'Lobby':G.phase==='final'?'Final':`Race ${G.race}/${G.races}`;
+  const showJoin=G&&role&&(!my.nick||G.phase==='lobby'||!inRoster()&&['bet','results'].includes(G.phase));
+  $('joinCard').classList.toggle('hide',!showJoin);
+  if(showJoin&&!$('nick').value&&document.activeElement!==$('nick'))$('nick').value=my.nick;
+  $('joinBtn').textContent=my.nick?'Update':'Join';
+  $('main').innerHTML=view();
+  renderDock();
+}
+function trackHTML(){
+  const vr=visibleRolls();const {pos,stamp,last}=replay(vr);
+  const done=G.phase==='results';const rk=done?rankOf(pos,stamp):[];
+  const lastH=last?horseOf(last[0]+last[1]):-1;
+  const showOdds=G.phase==='bet'||G.phase==='live';const odds=G.phase==='live'?G.oddsLive:G.oddsPre;
+  let status='';
+  if(G.phase==='bet')status='Betting open — waiting for the host to start';
+  if(G.phase==='race'||G.phase==='race2')status='🏇 They\'re off!';
+  if(G.phase==='live')status='';
+  return `<div class="card">
+  <div class="dice">${last?`<div class="die">${last[0]}</div><div class="die">${last[1]}</div><div class="sum">= ${last[0]+last[1]}</div>`:`<div class="status">${status}</div>`}</div>
+  <div class="track">${H.map((h,i)=>`<div class="lane ${rk[0]===i?'first':(!done&&i===lastH?'hot':'')}"><div class="lab" style="background:${h.c}">${h.k}</div>
+  <div class="cells">${Array.from({length:DIST[i]},(_,j)=>`<div class="cell ${j===DIST[i]-1?'fin':''} ${j<pos[i]?'on':''}">${pos[i]>0&&j===pos[i]-1?'<div class="horse">🐎</div>':''}</div>`).join('')}</div>
+  <div class="odds">${showOdds&&odds?odds[ui.type][i]+'×':done?(['1st','2nd','3rd'][rk.indexOf(i)]||''):''}</div></div>`).join('')}</div>
+  ${last&&status?`<div class="status" style="margin-top:8px">${status}</div>`:''}</div>`;
+}
+function betHTML(){
+  if(!inRoster())return `<div class="card note center">${my.nick?'Grabbing you a seat at the table…':'Pick a name above to join.'}</div>`;
+  const w=window_(),odds=w?G.oddsLive:G.oddsPre,left=myChips()-stakedNow();
+  const mine=my.bets.map((b,i)=>[b,i]).filter(([b])=>b.l===w);
+  const locked=w?(G.frozen||[]).filter(f=>f.id===me()&&!f.l):[];
+  return `<div class="card">
+  <div class="seg">${Object.keys(TYPES).map(t=>`<button class="${ui.type===t?'sel':''}" onclick="ui.type='${t}';render()">${TYPES[t]}</button>`).join('')}</div>
+  <div class="seg">${[5,10,25].map(v=>`<button class="${ui.amt===v?'sel':''}" onclick="ui.amt=${v};render()">${v}</button>`).join('')}<button class="${ui.amt==='all'?'sel':''}" onclick="ui.amt='all';render()">All in</button></div>
+  <div class="hgrid">${H.map((h,i)=>`<button class="hbtn" style="border-color:${h.c}" ${left<=0?'disabled':''} onclick="placeBet(${i})"><b style="color:${h.c}">${h.k}</b><small>${odds[ui.type][i]}×</small></button>`).join('')}</div>
+  <div class="note" style="margin-top:8px">${ui.type==='win'?'Pays if your horse finishes 1st.':ui.type==='place'?'Pays if your horse finishes top 2.':'Pays if your horse finishes top 3.'} Odds lock when you tap.</div>
+  ${mine.length||locked.length?`<h2>Your tickets</h2>${locked.map(b=>ticket(b)).join('')}${mine.map(([b,i])=>ticket(b,`<button class="danger" onclick="undoBet(${i})">Undo</button>`)).join('')}`:''}
+  </div>`;
+}
+const ticket=(b,right='')=>`<div class="bet"><span><b style="color:${H[b.h].c}">${H[b.h].k}</b> ${TYPES[b.t]} · ${b.a} @ ${b.m}×${b.l?'<span class="tag">live</span>':''}</span>${right}</div>`;
+function tableHTML(){
+  const ids=Object.keys(G.roster||{});if(!ids.length)return '';
+  const pend={};peers.forEach(p=>{const pr=p.presence||{};if(pr.game===G.game&&pr.race===G.race&&Array.isArray(pr.bets)){const w=window_();pend[pid(p)]=pr.bets.filter(b=>b.l===w).reduce((s,b)=>s+(+b.a||0),0);}});
+  const showPend=G.phase==='bet'||G.phase==='live';
+  return `<div class="card"><h2 style="margin-top:0">Table</h2><table>${ids.sort((a,b)=>G.roster[b].chips-G.roster[a].chips).map(id=>`<tr><td class="${id===me()?'me':''}"><span class="dot ${online(id)?'':'off'}"></span>${esc(G.roster[id].nick)}${id===me()?' (you)':''}</td><td class="n">${showPend&&pend[id]?`<span class="note">${pend[id]} bet · </span>`:''}${G.roster[id].chips}</td></tr>`).join('')}</table></div>`;
+}
+function racingTicketsHTML(){
+  const f=(G.frozen||[]).filter(x=>x.id===me());if(!f.length)return '';
+  return `<div class="card"><h2 style="margin-top:0">Your tickets</h2>${f.map(b=>ticket(b)).join('')}</div>`;
+}
+function resultsHTML(){
+  const r=G.results;if(!r)return '';
+  const mine=r.lines.filter(l=>l.id===me());const net=mine.reduce((s,l)=>s+l.pay-l.a,0);
+  return `<div class="card"><h2 style="margin-top:0">Race ${G.race} results</h2>
+  <div class="row" style="gap:6px;margin-bottom:10px">${r.rank.map((h,i)=>`<div class="grow center" style="background:${H[h].c};color:var(--ink);border-radius:10px;padding:8px 0;font-weight:900;font-family:Fraunces,serif">${['🥇','🥈','🥉'][i]} ${H[h].k}</div>`).join('')}</div>
+  ${mine.length?mine.map(l=>ticket(l,`<b class="${l.pay?'win':'lose'}">${l.pay?'+'+l.pay:'−'+l.a}</b>`)).join('')+`<div class="bet"><b>Net</b><b class="${net>=0?'win':'lose'}">${net>=0?'+':''}${net}</b></div>`:'<div class="note">You sat this one out.</div>'}
+  </div>`;
+}
+function view(){
+  if(!role)return homeHTML();
+  if(!G)return `<div class="card center note">${netMsg||'Connecting to table '+esc(code)+'…'}</div>`;
+  if(G.phase==='lobby'){
+    const ids=Object.keys(G.roster);
+    return `<div class="card"><h2 style="margin-top:0">Lobby</h2>
+    ${ids.length?`<table>${ids.map(id=>`<tr><td class="${id===me()?'me':''}"><span class="dot ${online(id)?'':'off'}"></span>${esc(G.roster[id].nick)}${id===me()?' (you)':''}</td><td class="n">${START_CHIPS}</td></tr>`).join('')}</table>`:'<div class="note">No one has joined yet.</div>'}
+    ${isHost?`<h2>Races</h2><div class="seg">${[3,4,5,6].map(n=>`<button class="${G.races===n?'sel':''}" onclick="hostSetRaces(${n})">${n}</button>`).join('')}</div>`:`<div class="note" style="margin-top:10px">${G.races} races. The host starts the game when everyone's in.</div>`}
+    </div>${isHost?shareHTML():''}${howHTML()}`;
+  }
+  if(G.phase==='final'){
+    const ids=Object.keys(G.roster).sort((a,b)=>G.roster[b].chips-G.roster[a].chips);
+    return `<div class="card center"><div style="font-size:46px">🏆</div><h2 style="margin-top:2px">${esc(G.roster[ids[0]]?.nick||'Nobody')} takes the purse!</h2>
+    <table style="margin-top:8px">${ids.map((id,i)=>`<tr><td class="${id===me()?'me':''}" style="text-align:left">${i+1}. ${esc(G.roster[id].nick)}</td><td class="n">${G.roster[id].chips}</td></tr>`).join('')}</table></div>`;
+  }
+  let out=trackHTML();
+  if(G.phase==='live'){const left=Math.max(0,Math.ceil(((recv[phaseKey()]||Date.now())+LIVE_MS-Date.now())/1000));out+=`<div class="banner"><span>🔴 Live betting · new odds</span><span>${left}s</span></div>`;}
+  if(G.phase==='bet'||G.phase==='live')out+=betHTML();
+  if(G.phase==='race'||G.phase==='race2')out+=racingTicketsHTML();
+  if(G.phase==='results')out+=resultsHTML();
+  return out+tableHTML();
+}
+function howHTML(){return `<div class="card"><h2 style="margin-top:0">How it works</h2><div class="note">Two dice are rolled each turn, and the horse matching the total moves one space (2·3 and 11·12 share a horse). Rare numbers have shorter tracks, so long shots can still steal it. Bet <b>Win</b> (1st), <b>Place</b> (top 2) or <b>Show</b> (top 3) before the race. Halfway through, the race pauses for 20 seconds of <b>live betting</b> at new odds. Most chips after the last race wins.</div></div>`;}
+function renderDock(){
+  const d=$('dock'),inn=$('dockIn');let html='';
+  const chips=inRoster()?`<div class="chips">${myChips()-(window_()!==null?stakedNow():0)}<small>chips${window_()!==null&&stakedNow()?` · ${stakedNow()} on the line`:''}</small></div>`:'';
+  if(isHost&&G){
+    const btn=(label,fn,dis)=>`<button class="primary grow" ${dis?'disabled':''} onclick="${fn}">${label}</button>`;
+    if(G.phase==='lobby')html=btn('Start game',"hostOpenBetting()",!Object.keys(G.roster).length);
+    else if(G.phase==='bet')html=btn(`🏁 Start race ${G.race}`,'hostStartRace()');
+    else if(G.phase==='live')html=btn('Close bets & run','hostResume()');
+    else if(G.phase==='results')html=btn(G.race>=G.races?'Final standings':'Next race →','hostNext()');
+    else if(G.phase==='final')html=btn('New game','hostNewGame()');
+    else html=`<div class="grow note center">Race in progress…</div>`;
+  }else if(G){
+    const msg={lobby:'Waiting for the host to start',bet:'Place your bets',race:'Race in progress',live:'Live betting is open',race2:'Race in progress',results:'Waiting for the next race',final:'Game over'}[G.phase]||'';
+    html=`<div class="grow note" style="text-align:right">${msg}</div>`;
+  }
+  inn.innerHTML=chips+html;d.classList.toggle('hide',!G);
+}
+function hostSetRaces(n){const s=clone(G);s.races=n;hostWrite(s);}
+
+// animation tick: re-render while horses are moving or the live clock runs
+let lastSig='';
+setInterval(()=>{if(!G)return;if(['race','race2','live'].includes(G.phase)){const sig=G.phase+visibleRolls().length+(G.phase==='live'?Math.floor(Date.now()/1000):'');if(sig!==lastSig){lastSig=sig;render();}}},120);
+
+// ===== Networking (peer-to-peer: the host's browser is the server) =====
+function broadcast(m){Object.values(conns).forEach(c=>{try{if(c.open)c.send(m)}catch(e){}});}
+function publishPeers(){
+  peers=Object.entries(seats).map(([id,x])=>({by:id,peer:id,presence:x.presence||{},online:x.online,isMe:id===myId,kind:'viewer'}));
+  broadcast({type:'peers',list:peers.map(p=>({by:p.by,presence:p.presence,online:p.online}))});
+  hostSync();render();
+}
+function hostMsg(conn,m){
+  if(!m||typeof m!=='object')return;
+  if(m.type==='hello'&&typeof m.pid==='string'){
+    const id=m.pid.slice(0,24);if(id===myId)return;conn.pid=id;
+    if(conns[id]&&conns[id]!==conn){try{conns[id].close()}catch(e){}}
+    conns[id]=conn;seats[id]=seats[id]||{presence:{}};seats[id].online=true;
+    try{conn.send({type:'state',G})}catch(e){}
+    publishPeers();
+  }
+  if(m.type==='pres'&&conn.pid&&seats[conn.pid]){
+    const pr=m.presence;if(pr&&typeof pr==='object'&&JSON.stringify(pr).length<4000){seats[conn.pid].presence=pr;publishPeers();}
+  }
+}
+function openHostPeer(){
+  netMsg='Opening table…';render();
+  peerObj=new Peer(PFX+code);
+  peerObj.on('open',()=>{netMsg='';render();});
+  peerObj.on('connection',conn=>{
+    conn.on('data',m=>hostMsg(conn,m));
+    conn.on('close',()=>{if(conn.pid&&conns[conn.pid]===conn){delete conns[conn.pid];if(seats[conn.pid])seats[conn.pid].online=false;publishPeers();}});
+  });
+  peerObj.on('disconnected',()=>{try{peerObj.reconnect()}catch(e){}});
+  peerObj.on('error',e=>{
+    if(e.type==='unavailable-id'){netMsg='Reclaiming your table…';render();try{peerObj.destroy()}catch(x){}setTimeout(openHostPeer,4000);}
+    else{netMsg='Connection hiccup: '+e.type;render();}
+  });
+}
+function startHost(resume){
+  role='host';isHost=true;
+  if(resume){code=resume.code;G=resume.G;}else{code=Array.from({length:5},()=>'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*31)]).join('');}
+  if(!my.nick)my.nick='Host';
+  history.replaceState(null,'',location.pathname);
+  openHostPeer();
+  if(resume){onState();hostRecover();}else hostNewGame(4);
+  pushPresence();
+}
+let retryT=null;
+function scheduleRetry(ms){clearTimeout(retryT);retryT=setTimeout(connectHost,ms);}
+function connectHost(){
+  if(!peerObj||peerObj.destroyed)return;
+  if(peerObj.disconnected){try{peerObj.reconnect()}catch(e){}scheduleRetry(2500);return;}
+  if(hostConn&&hostConn.open)return;
+  const c=peerObj.connect(PFX+code,{reliable:true});hostConn=c;
+  c.on('open',()=>{netMsg='';c.send({type:'hello',pid:myId});pushPresence();render();});
+  c.on('data',m=>{
+    if(!m||typeof m!=='object')return;
+    if(m.type==='state'){G=m.G?clone(m.G):null;onState();}
+    if(m.type==='peers'&&Array.isArray(m.list)){peers=m.list.map(p=>({...p,peer:p.by,isMe:p.by===myId,kind:'viewer'}));render();}
+  });
+  c.on('close',()=>{if(hostConn===c){netMsg='Reconnecting…';render();scheduleRetry(2000);}});
+}
+function startPlayer(c){
+  role='player';code=c.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
+  try{localStorage.removeItem('pf_host')}catch(e){}
+  netMsg='Connecting to table '+code+'…';render();
+  peerObj=new Peer();
+  peerObj.on('open',connectHost);
+  peerObj.on('disconnected',()=>{try{peerObj.reconnect()}catch(e){}});
+  peerObj.on('error',e=>{
+    if(e.type==='peer-unavailable'){netMsg='Can\'t find table '+code+'. Check the code, and make sure the host has the page open.';render();scheduleRetry(4000);}
+    else{netMsg='Connection hiccup ('+e.type+'), retrying…';render();scheduleRetry(4000);}
+  });
+}
+const shareURL=()=>location.origin+location.pathname+'?join='+code;
+function copyLink(btn){
+  const u=shareURL();
+  (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>{btn.textContent='Copied!';},()=>{prompt('Copy this link:',u);});
+}
+function shareHTML(){return `<div class="card center"><div class="note">Friends join at this link, or with the code</div>
+  <div style="font-family:Fraunces,serif;font-size:40px;font-weight:900;letter-spacing:6px;color:var(--gold);margin:6px 0">${esc(code)}</div>
+  <div class="note" style="word-break:break-all;margin-bottom:8px">${esc(shareURL())}</div>
+  <button class="grow" style="width:100%" onclick="copyLink(this)">Copy invite link</button>
+  <div class="note" style="margin-top:8px">Keep this page open while you play. Your phone runs the table.</div></div>`;}
+function homeHTML(){
+  let saved=null;try{saved=JSON.parse(localStorage.getItem('pf_host'))}catch(e){}
+  return `<div class="card"><h2 style="margin-top:0">Host a table</h2><div class="note" style="margin-bottom:10px">You run the race and friends join from their phones. No accounts needed.</div>
+  <button class="primary" style="width:100%" onclick="startHost()">Host a new game</button>
+  ${saved&&saved.code&&saved.G&&saved.G.phase!=='final'?`<button style="width:100%;margin-top:8px" onclick='startHost(JSON.parse(localStorage.getItem("pf_host")))'>Resume table ${esc(saved.code)}</button>`:''}</div>
+  <div class="card"><h2 style="margin-top:0">Join a table</h2><div class="row"><input id="codeIn" maxlength="8" placeholder="Table code" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase"><button class="primary" onclick="const v=document.getElementById('codeIn').value.trim();if(v)startPlayer(v)">Join</button></div></div>
+  ${howHTML()}`;
+}
+
+// ===== Boot =====
+$('joinBtn').onclick=join;$('nick').addEventListener('keydown',e=>{if(e.key==='Enter')join();});
+(()=>{
+  if(typeof Peer==='undefined'){$('main').innerHTML='<div class="card note center">Couldn\'t load the multiplayer library. Check your connection and refresh.</div>';return;}
+  const q=new URLSearchParams(location.search).get('join');
+  if(q)startPlayer(q);else render();
+})();
+</script>
+</body>
+</html>
