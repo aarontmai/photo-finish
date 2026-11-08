@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>Photo Finish: Dice Derby</title>
+<title>Jockey Gambling Club</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -90,7 +90,7 @@ input{font:inherit;font-size:16px;background:var(--ink);color:var(--cream);borde
 </head>
 <body>
 <div class="wrap">
-  <header><h1>Photo <span>Finish</span></h1><div id="pill" class="pill">Dice Derby</div></header>
+  <header><h1>Jockey Gambling <span>Club</span></h1><div id="pill" class="pill">JGC</div></header>
   <div id="joinCard" class="card hide">
     <h2 style="margin-top:0">Your name</h2>
     <div class="row"><input id="nick" maxlength="12" placeholder="Name" autocomplete="off"><button class="primary" id="joinBtn">Join</button></div>
@@ -366,7 +366,7 @@ function copyLink(btn){const u=shareURL();(navigator.clipboard?navigator.clipboa
 
 // ================= Render =================
 function render(){
-  $('pill').textContent=!G?'Dice Derby':G.phase==='lobby'?'Table '+code:G.phase==='final'?'Final':`Race ${G.race}/${G.races}`;
+  $('pill').textContent=!G?'JGC':G.phase==='lobby'?'Table '+code:G.phase==='final'?'Final':`Race ${G.race}/${G.races}`;
   const showJoin=G&&role&&(!myNick||!me())&&G.phase!=='final';
   $('joinCard').classList.toggle('hide',!showJoin);
   if(showJoin&&!$('nick').value&&document.activeElement!==$('nick'))$('nick').value=myNick;
