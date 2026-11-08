@@ -39,7 +39,14 @@ input{font:inherit;font-size:16px;background:var(--ink);color:var(--cream);borde
 .cell{flex:1;border-radius:4px;background:rgba(246,239,220,.07);position:relative}
 .cell.fin{background:repeating-conic-gradient(#f6efdc 0 25%,#0b1a12 0 50%) 0 0/7px 7px;opacity:.5}
 .cell.on{background:rgba(246,239,220,.2)}
-.cell.half{border-left:2px dashed rgba(232,181,74,.6)}
+.cell.half{box-shadow:inset -3px 0 0 #e0443c}
+.cell.late{box-shadow:inset -3px 0 0 rgba(232,181,74,.6)}
+.perks{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.perk{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;text-align:center;background:linear-gradient(180deg,#24603f,#173f2a);border:1.5px solid rgba(232,181,74,.5)}
+.perk .pe{font-size:26px}
+.perk b{font-size:13px}
+.perk span{font-size:11px;font-weight:600;color:var(--muted);line-height:1.35}
+.tk{min-width:0}
 .horse{position:absolute;inset:0;display:grid;place-items:center;font-size:14px}
 .lane.hot .lab{box-shadow:0 0 0 2px var(--cream)}
 .lane.first .lab{box-shadow:0 0 0 3px var(--gold)}
@@ -103,10 +110,11 @@ input{font:inherit;font-size:16px;background:var(--ink);color:var(--cream);borde
 <script>
 // ================= Rules & constants =================
 const H=[{k:'2·3',c:'#e05a5a'},{k:'4',c:'#f08a3c'},{k:'5',c:'#efc94c'},{k:'6',c:'#8fd16b'},{k:'7',c:'#4cc9b0'},{k:'8',c:'#5aa7e0'},{k:'9',c:'#8b7fe8'},{k:'10',c:'#d07ad6'},{k:'11·12',c:'#f2a7c3'}];
-const DIST=Array(9).fill(6);             // every horse runs the same 6-space track; rare numbers are long shots
-const HALF=i=>Math.ceil(DIST[i]/2);      // betting closes when any horse reaches its halfway mark
+const DIST=Array(9).fill(10);            // every horse runs the same 10-space track; rare numbers are long shots
+const HALF=i=>Math.ceil(DIST[i]/2);      // betting closes when any horse reaches the red line
+const LATE=i=>Math.ceil(DIST[i]*0.8);    // Late Bird perk: still betting until this line
 const TOKENS=[2,3,3,4,5];                // each player's betting tokens, every race
-const STEP=1100;                         // ms between rolls
+const STEP=800;                         // ms between rolls
 const PCOL=['#e8b54a','#5ad1e8','#ff8fb1','#b4e86b','#c89bff','#ff9f5a','#7fe0c0','#f2f2f2'];
 const COLS={w:'Win',p:'Place',s:'Show'},TOPN={w:1,p:2,s:3};
 const GROUPS={L:{label:'Low',hs:[0,1,2]},M:{label:'Mid',hs:[3,4,5]},X:{label:'High',hs:[6,7,8]}};
@@ -126,10 +134,35 @@ const PROPS=[
   ()=>{const x=pick([2,3,5,6]);return{k:'gate',a:[x],t:`The ${H[x].k} never leaves the gate`}},
   ()=>{const x=pick([0,1,2,6,7,8]);return{k:'last',a:[x],t:`The ${H[x].k} finishes dead last`}},
   ()=>{const xs=[...Array(9).keys()].sort(()=>Math.random()-.5).slice(0,2);return{k:'pair',a:xs,t:`Both the ${H[xs[0]].k} and the ${H[xs[1]].k} finish top 3`}},
-  ()=>({k:'long',t:'Marathon: the race takes 30+ rolls'}),
-  ()=>({k:'short',t:'Sprint: the race ends in 20 rolls or fewer'}),
+  ()=>({k:'long',t:'Marathon: the race takes 54+ rolls'}),
+  ()=>({k:'short',t:'Sprint: the race ends in 41 rolls or fewer'}),
   ()=>{const x=pick([3,5]);return{k:'beats',a:[x,4],t:`The ${H[x].k} finishes ahead of the 7`}},
+  ()=>({k:'blowout',t:'Blowout: the winner finishes 3+ spaces ahead of 2nd'}),
+  ()=>({k:'odd',t:'An odd number wins (5, 7 or 9)'}),
+  ()=>({k:'even',t:'An even number wins (4, 6, 8 or 10)'}),
+  ()=>({k:'lowshow',t:'The top 3 are all Low horses or all High horses'}),
+  ()=>({k:'stuck',t:'Two or more horses never leave the gate'}),
+  ()=>{const x=pick([0,1,7,8]);return{k:'top3',a:[x],t:`Long shot ${H[x].k} sneaks into the top 3`}},
+  ()=>({k:'sevenclose',t:'The 7 wins by exactly 1 space'}),
 ];
+
+// Augment perks: each race every player picks 1 of 3
+const PERKS={
+  high:{e:'💎',n:'High Roller',d:'Your 5-token pays double when it hits.'},
+  insure:{e:'🛡️',n:'Insurance',d:'You pay no penalties this race.'},
+  extra:{e:'➕',n:'Extra Token',d:'You get a bonus 4-token this race.'},
+  late:{e:'🐦',n:'Late Bird',d:'You can keep betting after the red line, until a horse reaches space 8.'},
+  under:{e:'🐢',n:'Underdog',d:'Your Win bets on 2·3, 4, 10 or 11·12 pay 1.5×.'},
+  pony:{e:'🐴',n:'Show Pony',d:'Your Show bets get +1 on the multiplier.'},
+  side:{e:'🎲',n:'Side Hustle',d:'Your group and side bets pay double.'},
+  conso:{e:'🍀',n:'Consolation',d:'You get $1 back for every token that misses.'},
+  streak:{e:'🔥',n:'Hot Streak',d:'+$6 if 3 or more of your tokens hit.'},
+  chalk:{e:'⭐',n:'Chalk Eater',d:'+$4 if the 7 wins.'},
+  bonus:{e:'💵',n:'Signing Bonus',d:'+$3 right away, no strings attached.'},
+};
+const perkOf=id=>G&&G.perks&&G.perks[id];
+const tokensFor=id=>perkOf(id)==='extra'?TOKENS.concat([4]):TOKENS;
+function dealOffers(){return Object.keys(PERKS).sort(()=>Math.random()-.5).slice(0,3);}
 
 // ================= Race model =================
 function rankOf(pos,stamp){return [...Array(9).keys()].sort((a,b)=>(pos[b]/DIST[b]-pos[a]/DIST[a])||(stamp[a]-stamp[b]));}
@@ -146,9 +179,16 @@ function hits(sq,o){ // does square sq pay given outcome o?
     case 'gate':return pos[a[0]]===0;
     case 'last':return rk[8]===a[0];
     case 'pair':return rk.slice(0,3).includes(a[0])&&rk.slice(0,3).includes(a[1]);
-    case 'long':return n>=30;
-    case 'short':return n<=20;
+    case 'long':return n>=54;
+    case 'short':return n<=41;
     case 'beats':return rk.indexOf(a[0])<rk.indexOf(a[1]);
+    case 'blowout':return pos[rk[0]]-pos[rk[1]]>=3;
+    case 'odd':return [2,4,6].includes(rk[0]);
+    case 'even':return [1,3,5,7].includes(rk[0]);
+    case 'lowshow':{const t=rk.slice(0,3);return t.every(h=>h<=2)||t.every(h=>h>=6);}
+    case 'stuck':return pos.filter(v=>v===0).length>=2;
+    case 'top3':return rk.slice(0,3).includes(a[0]);
+    case 'sevenclose':return rk[0]===4&&pos[4]-pos[rk[1]]===1;
   }
   return false;
 }
@@ -158,17 +198,17 @@ function simRace(){
   return outcomeOf(pos,stamp,n);
 }
 // Build this race's board: multipliers and penalties come from simulated odds
-function buildBoard(){
+function buildBoard(prev){
   const sqs={};
   H.forEach((h,i)=>Object.keys(COLS).forEach(c=>sqs['h'+i+c]={t:'h',h:i,c}));
   Object.keys(GROUPS).forEach(g=>sqs['g'+g]={t:'g',g});
-  const used=new Set();let props=[];
+  const used=new Set(prev||[]);let props=[];
   while(props.length<3){const p=pick(PROPS)();if(used.has(p.k))continue;used.add(p.k);props.push(p);}
   props.forEach((p,i)=>sqs['p'+i]={t:'p',k:p.k,a:p.a,txt:p.t});
   const N=6000,cnt={};for(const id in sqs)cnt[id]=0;
   for(let i=0;i<N;i++){const o=simRace();for(const id in sqs)if(hits(sqs[id],o))cnt[id]++;}
   for(const id in sqs){const p=Math.max(cnt[id]/N,0.004);
-    sqs[id].m=Math.max(1,Math.min(40,Math.round(0.7/p)));
+    sqs[id].m=Math.max(1,Math.min(60,Math.round(0.7/p)));
     sqs[id].pen=p<0.08?2:p<0.2?1:0;}
   return sqs;
 }
@@ -182,12 +222,13 @@ let myNick='';try{myNick=localStorage.getItem('pf_nick')||''}catch(e){}
 let G=null,online={},selTok=null;
 
 const me=()=>G&&G.roster&&G.roster[myId];
-const usedToks=id=>new Set(Object.values(G.claims||{}).filter(c=>c.id===id).map(c=>c.ti));
-const bettingOpen=()=>G&&(G.phase==='bet'||(G.phase==='race'&&G.open));
+let pendingToks=new Set(); // my taps the host hasn't confirmed yet
+const usedToks=id=>{const u=new Set(Object.values(G.claims||{}).filter(c=>c.id===id).map(c=>c.ti));if(id===myId)pendingToks.forEach(t=>u.add(t));return u;};
+const bettingOpen=(id=myId)=>G&&(G.phase==='bet'||(G.phase==='race'&&(G.open||(G.open2&&perkOf(id)==='late'))));
 
 // ================= Host engine (host's phone is the source of truth) =================
 function hostWrite(next){
-  G=next;try{localStorage.setItem('pf_host',JSON.stringify({code,G}))}catch(e){}
+  G=next;pendingToks.clear();try{localStorage.setItem('pf_host',JSON.stringify({code,G}))}catch(e){}
   broadcast({type:'state',G});render();
 }
 function hostNewGame(races){
@@ -198,39 +239,63 @@ function hostAddPlayer(id,nick){
   if(!G)return;nick=String(nick||'').trim().slice(0,12);if(!nick)return;
   const s=clone(G);
   if(s.roster[id]){if(s.roster[id].nick===nick)return;s.roster[id].nick=nick;}
-  else{if(s.phase==='final')return;const usedC=Object.values(s.roster).map(p=>p.col);s.roster[id]={nick,cash:0,col:PCOL.find(c=>!usedC.includes(c))||pick(PCOL)};}
+  else{if(s.phase==='final')return;const usedC=Object.values(s.roster).map(p=>p.col);s.roster[id]={nick,cash:0,col:PCOL.find(c=>!usedC.includes(c))||pick(PCOL)};if(s.phase==='bet'&&s.offers)s.offers[id]=dealOffers();}
   hostWrite(s);
 }
 function hostClaim(id,sq,ti){
-  if(!G||!G.roster[id]||!bettingOpen())return 'Betting is closed';
+  if(!G||!G.roster[id]||!bettingOpen(id))return 'Betting is closed';
   if(!G.board[sq])return 'No such square';
   if(G.claims[sq])return 'Someone beat you to it';
-  if(!(ti>=0&&ti<TOKENS.length))return 'Pick a token';
+  if(!(ti>=0&&ti<tokensFor(id).length))return 'Pick a token';
   if(usedToks(id).has(ti))return 'Token already used';
-  const s=clone(G);s.claims[sq]={id,ti,v:TOKENS[ti]};hostWrite(s);return null;
+  const s=clone(G);s.claims[sq]={id,ti,v:tokensFor(id)[ti]};hostWrite(s);return null;
 }
 function hostUnclaim(id,sq){ // only before the race starts
   if(!G||G.phase!=='bet'||!G.claims[sq]||G.claims[sq].id!==id)return;
   const s=clone(G);delete s.claims[sq];hostWrite(s);
 }
 function hostOpenBetting(){
-  const s=clone(G);s.race++;s.phase='bet';s.board=buildBoard();s.claims={};s.rolls=[];s.open=true;s.results=null;hostWrite(s);
+  const prev=G.board?[0,1,2].map(i=>G.board['p'+i]&&G.board['p'+i].k):[];
+  const s=clone(G);s.race++;s.phase='bet';s.board=buildBoard(prev);s.claims={};s.rolls=[];s.open=true;s.open2=true;s.results=null;
+  s.offers={};s.perks={};for(const id in s.roster)s.offers[id]=dealOffers();hostWrite(s);
 }
 let raceTimer=null;
 function replay(rolls){const pos=Array(9).fill(0),stamp=Array(9).fill(0);rolls.forEach((r,i)=>{const h=horseOf(Math.floor(r/10)+r%10);pos[h]=Math.min(DIST[h],pos[h]+1);stamp[h]=i+1;});return{pos,stamp};}
-function hostStartRace(){const s=clone(G);s.phase='race';s.open=true;hostWrite(s);clearInterval(raceTimer);raceTimer=setInterval(hostRoll,STEP);}
+function hostPickPerk(id,k){
+  if(!G||G.phase!=='bet'||!G.offers||!G.offers[id]||!G.offers[id].includes(k)||(G.perks&&G.perks[id]))return;
+  const s=clone(G);s.perks[id]=k;hostWrite(s);
+}
+function hostStartRace(){const s=clone(G);s.phase='race';s.open=true;s.open2=true;
+  for(const id in s.roster)if(!s.perks[id]&&s.offers[id])s.perks[id]=pick(s.offers[id]); // undecided players get a random perk
+  hostWrite(s);clearInterval(raceTimer);raceTimer=setInterval(hostRoll,STEP);}
 function hostRoll(){
   if(!G||G.phase!=='race'){clearInterval(raceTimer);return;}
   const s=clone(G);const a=d6(),b=d6(),h=horseOf(a+b);s.rolls.push(a*10+b);
   const {pos,stamp}=replay(s.rolls);
   if(s.open&&pos.some((p,i)=>p>=HALF(i)))s.open=false;
-  if(pos[h]>=DIST[h]){clearInterval(raceTimer);s.open=false;settle(s,pos,stamp);}
+  if(s.open2&&pos.some((p,i)=>p>=LATE(i)))s.open2=false;
+  if(pos[h]>=DIST[h]){clearInterval(raceTimer);s.open=false;s.open2=false;settle(s,pos,stamp);}
   hostWrite(s);
 }
 function settle(s,pos,stamp){
   const o=outcomeOf(pos,stamp,s.rolls.length);const lines=[];
-  for(const sq in s.claims){const c=s.claims[sq],b=s.board[sq],hit=hits(b,o);const d=hit?c.v*b.m:-b.pen;
-    if(s.roster[c.id])s.roster[c.id].cash+=d;lines.push({sq,id:c.id,v:c.v,hit,d});}
+  const nh={};
+  for(const sq in s.claims){const c=s.claims[sq],b=s.board[sq],hit=hits(b,o),pk=s.perks&&s.perks[c.id];let d=hit?c.v*b.m:-b.pen,boost=false;
+    if(hit){nh[c.id]=(nh[c.id]||0)+1;
+      if(pk==='high'&&c.v===5){d*=2;boost=true;}
+      if(pk==='under'&&b.t==='h'&&b.c==='w'&&[0,1,7,8].includes(b.h)){d=Math.round(d*1.5);boost=true;}
+      if(pk==='pony'&&b.t==='h'&&b.c==='s'){d=c.v*(b.m+1);boost=true;}
+      if(pk==='side'&&(b.t==='g'||b.t==='p')){d*=2;boost=true;}
+    }else{
+      if(pk==='insure'&&d<0){d=0;boost=true;}
+      if(pk==='conso'){d+=1;boost=true;}
+    }
+    if(s.roster[c.id])s.roster[c.id].cash+=d;lines.push({sq,id:c.id,v:c.v,hit,d,boost});}
+  for(const id in s.roster){const pk=s.perks&&s.perks[id];let d=0;
+    if(pk==='streak'&&(nh[id]||0)>=3)d=6;
+    if(pk==='chalk'&&o.rk[0]===4)d=4;
+    if(pk==='bonus')d=3;
+    if(d){s.roster[id].cash+=d;lines.push({sq:null,id,perk:pk,d,hit:true});}}
   s.results={rk:o.rk.slice(0,3),lines,hit:Object.keys(s.board).filter(id=>hits(s.board[id],o))};
   s.phase='results';
 }
@@ -291,9 +356,9 @@ function tapSquare(sq){
   const c=G.claims[sq];
   if(c){if(c.id===myId&&G.phase==='bet')send({type:'unclaim',sq});return;}
   if(!bettingOpen())return toast('Betting is closed');
-  if(selTok===null||usedToks(myId).has(selTok)){const free=TOKENS.map((v,i)=>i).filter(i=>!usedToks(myId).has(i));if(!free.length)return toast('All your tokens are out');selTok=free[free.length-1];}
-  send({type:'claim',sq,ti:selTok});
-  const left=TOKENS.map((v,i)=>i).filter(i=>i!==selTok&&!usedToks(myId).has(i));selTok=left.length?left[left.length-1]:null;
+  if(selTok===null||usedToks(myId).has(selTok)){const free=tokensFor(myId).map((v,i)=>i).filter(i=>!usedToks(myId).has(i));if(!free.length)return toast('All your tokens are out');selTok=free[free.length-1];}
+  send({type:'claim',sq,ti:selTok});pendingToks.add(selTok);
+  const left=tokensFor(myId).map((v,i)=>i).filter(i=>!usedToks(myId).has(i));selTok=left.length?left[left.length-1]:null;
 }
 function pickTok(i){selTok=i;renderDock();}
 function join(){const v=$('nick').value.trim().slice(0,12);if(!v)return;myNick=v;try{localStorage.setItem('pf_nick',v)}catch(e){}send({type:'nick',nick:v});render();}
@@ -307,6 +372,7 @@ function hostHandle(id,m){
   if(m.type==='nick')hostAddPlayer(id,m.nick);
   if(m.type==='claim'){const err=hostClaim(id,String(m.sq),m.ti|0);if(err){if(id===myId)toast(err);else{const c=conns[id];try{c&&c.send({type:'err',msg:err})}catch(e){}}}}
   if(m.type==='unclaim')hostUnclaim(id,String(m.sq));
+  if(m.type==='perk')hostPickPerk(id,String(m.k));
 }
 function onHostConn(conn){
   conn.on('data',m=>{
@@ -347,9 +413,9 @@ function connectHost(){
   const c=peerObj.connect(PFX+code,{reliable:true});hostConn=c;
   c.on('open',()=>{netMsg='';c.send({type:'hello',pid:myId,nick:myNick});render();});
   c.on('data',m=>{if(!m||typeof m!=='object')return;
-    if(m.type==='state'){G=m.G?clone(m.G):null;render();}
+    if(m.type==='state'){const ng=m.G?clone(m.G):null;if(!ng||!G||ng.race!==G.race||ng.game!==G.game)pendingToks.clear();G=ng;if(G){const mine=new Set(Object.values(G.claims||{}).filter(c=>c.id===myId).map(c=>c.ti));pendingToks.forEach(t=>{if(mine.has(t))pendingToks.delete(t);});}render();}
     if(m.type==='online'&&Array.isArray(m.ids)){online={};m.ids.forEach(i=>online[i]=true);render();}
-    if(m.type==='err')toast(String(m.msg).slice(0,60));});
+    if(m.type==='err'){pendingToks.clear();render();toast(String(m.msg).slice(0,60));}});
   c.on('close',()=>{if(hostConn===c){netMsg='Reconnecting…';render();scheduleRetry(2000);}});
 }
 function startPlayer(c){
@@ -380,8 +446,9 @@ function view(){
   if(G.phase==='lobby')return out+lobbyHTML();
   if(G.phase==='final')return out+finalHTML();
   out+=trackHTML();
+  out+=perkHTML();
   if(G.phase==='bet')out+=`<div class="banner open">Betting open. Tap a square to drop a token${me()?'. Tap your own token to take it back before the start':''}.</div>`;
-  if(G.phase==='race')out+=G.open?`<div class="banner open">🟢 Betting still open, closes when a horse reaches the halfway line</div>`:`<div class="banner closed">🔒 Betting closed</div>`;
+  if(G.phase==='race')out+=G.open?`<div class="banner open">🟢 Betting still open, closes when a horse crosses the red line</div>`:`<div class="banner closed">🔒 Betting closed${G.open2&&Object.values(G.perks||{}).includes('late')?' (🐦 Late Birds can still bet)':''}</div>`;
   if(G.phase==='results')out+=resultsHTML();
   return out+boardHTML()+playersHTML();
 }
@@ -403,7 +470,7 @@ function trackHTML(){
   return `<div class="card">
   <div class="dice">${last?`<div class="die">${Math.floor(last/10)}</div><div class="die">${last%10}</div><div class="sum">= ${Math.floor(last/10)+last%10}</div><div class="note" style="margin-left:6px">roll ${G.rolls.length}</div>`:`<div class="status">${G.phase==='bet'?'Waiting at the gate…':''}</div>`}</div>
   <div class="track">${H.map((h,i)=>`<div class="lane ${rk[0]===i?'first':(!done&&i===lastH?'hot':'')}"><div class="lab" style="background:${h.c}">${h.k}</div>
-  <div class="cells">${Array.from({length:DIST[i]},(_,j)=>`<div class="cell ${j===DIST[i]-1?'fin':''} ${j<pos[i]?'on':''} ${j===HALF(i)-1?'half':''}">${pos[i]>0&&j===pos[i]-1?'<div class="horse">🐎</div>':''}</div>`).join('')}</div></div>`).join('')}</div></div>`;
+  <div class="cells">${Array.from({length:DIST[i]},(_,j)=>`<div class="cell ${j===DIST[i]-1?'fin':''} ${j<pos[i]?'on':''} ${j===HALF(i)-1?'half':''} ${j===LATE(i)-1&&Object.values(G.perks||{}).includes('late')?'late':''}">${pos[i]>0&&j===pos[i]-1?'<div class="horse">🐎</div>':''}</div>`).join('')}</div></div>`).join('')}</div></div>`;
 }
 function sqHTML(id){
   const b=G.board[id],c=G.claims[id],R=G.results;
@@ -411,6 +478,15 @@ function sqHTML(id){
   const can=!c&&bettingOpen()&&me();
   let inner=c?(()=>{const p=G.roster[c.id]||{nick:'?',col:'#888'};return `<div class="tok" style="background:${p.col}"><b>${c.v}</b><i>${esc(p.nick)}</i></div>`})():`<div class="m">×${b.m}</div>${b.pen?`<div class="pen">−$${b.pen}</div>`:''}`;
   return `<div class="sq ${c?'taken':''} ${can?'can':''} ${st}" onclick="tapSquare('${id}')">${inner}</div>`;
+}
+function perkHTML(){
+  if(!me()||!G.offers||!['bet','race','results'].includes(G.phase))return '';
+  const mine=perkOf(myId);
+  if(mine){const P=PERKS[mine];return `<div class="card" style="padding:8px 10px"><div class="note"><b style="color:var(--cream)">${P.e} ${P.n}</b> · ${P.d}</div></div>`;}
+  if(G.phase!=='bet')return '';
+  const offers=G.offers[myId]||[];
+  return `<div class="card"><h3 style="margin-top:0">Pick your perk for this race</h3><div class="perks">${offers.map(k=>`<button class="perk" onclick="send({type:'perk',k:'${k}'})"><div class="pe">${PERKS[k].e}</div><b>${PERKS[k].n}</b><span>${PERKS[k].d}</span></button>`).join('')}</div>
+  <div class="note" style="margin-top:6px">If you don't pick, you get a random one when the race starts.</div></div>`;
 }
 function boardHTML(){
   if(!G.board)return '';
@@ -428,14 +504,14 @@ function boardHTML(){
 function playersHTML(){
   const ids=Object.keys(G.roster).sort((a,b)=>G.roster[b].cash-G.roster[a].cash);
   return `<div class="card"><h3 style="margin-top:0">Table${G.buyin?` · ${usd(G.buyin*Object.keys(G.roster).length)} pot`:''}</h3>${ids.map(id=>{const p=G.roster[id];const n=Object.values(G.claims||{}).filter(c=>c.id===id).length;
-  return `<div class="pl ${online[id]?'':'off'}"><span><span class="sw" style="background:${p.col}"></span>${esc(p.nick)}${id===myId?' (you)':''}${G.phase!=='lobby'&&G.phase!=='final'?` <span class="note">· ${n}/${TOKENS.length} tokens out</span>`:''}</span><span class="cash ${p.cash<0?'neg':''}">${money(p.cash)}</span></div>`}).join('')}</div>`;
+  return `<div class="pl ${online[id]?'':'off'}"><span><span class="sw" style="background:${p.col}"></span>${esc(p.nick)}${id===myId?' (you)':''}${perkOf(id)&&G.phase!=='lobby'&&G.phase!=='final'?` <span title="${esc(PERKS[perkOf(id)].n)}">${PERKS[perkOf(id)].e}</span>`:''}${G.phase!=='lobby'&&G.phase!=='final'?` <span class="note">· ${n}/${tokensFor(id).length} out</span>`:''}</span><span class="cash ${p.cash<0?'neg':''}">${money(p.cash)}</span></div>`}).join('')}</div>`;
 }
 function resultsHTML(){
   const R=G.results;const mine=R.lines.filter(l=>l.id===myId);const net=mine.reduce((s,l)=>s+l.d,0);
-  const name=sq=>{const b=G.board[sq];return b.t==='h'?`${H[b.h].k} ${COLS[b.c]}`:b.t==='g'?`${GROUPS[b.g].label} group`:b.txt;};
+  const name=sq=>{if(!sq)return '';const b=G.board[sq];return b.t==='h'?`${H[b.h].k} ${COLS[b.c]}`:b.t==='g'?`${GROUPS[b.g].label} group`:b.txt;};
   return `<div class="card"><h2 style="margin-top:0">Race ${G.race} results</h2>
   <div class="row" style="gap:6px;margin-bottom:8px">${R.rk.map((h,i)=>`<div class="grow center" style="background:${H[h].c};color:var(--ink);border-radius:10px;padding:7px 0;font-weight:900;font-family:Fraunces,serif">${['🥇','🥈','🥉'][i]} ${H[h].k}</div>`).join('')}</div>
-  ${me()?(mine.length?mine.map(l=>`<div class="res"><span>${l.v}-token on ${esc(name(l.sq))}</span><b class="${l.d>0?'pos':l.d<0?'neg':''}">${l.d>0?'+$'+l.d:l.d<0?'−$'+(-l.d):'$0'}</b></div>`).join('')+`<div class="res"><b>Your race</b><b class="${net>=0?'pos':'neg'}">${net>=0?'+':'−'}$${Math.abs(net)}</b></div>`:'<div class="note">You didn\'t place any tokens this race.</div>'):''}
+  ${me()?(mine.length?mine.map(l=>`<div class="res"><span>${l.sq?`${l.v}-token on ${esc(name(l.sq))}${l.boost?' ✨':''}`:`${PERKS[l.perk].e} ${PERKS[l.perk].n} bonus`}</span><b class="${l.d>0?'pos':l.d<0?'neg':''}">${l.d>0?'+$'+l.d:l.d<0?'−$'+(-l.d):'$0'}</b></div>`).join('')+`<div class="res"><b>Your race</b><b class="${net>=0?'pos':'neg'}">${net>=0?'+':'−'}$${Math.abs(net)}</b></div>`:'<div class="note">You didn\'t place any tokens this race.</div>'):''}
   </div>`;
 }
 function lobbyHTML(){
@@ -456,7 +532,7 @@ function finalHTML(){
 function howHTML(){return `<div class="card"><h3 style="margin-top:0">How to play</h3><div class="note">
 Each race, two dice roll over and over and the horse matching the total moves one space (2·3 and 11·12 share a horse). Every track is the same length, so rare numbers are real long shots, and the board pays them big.<br><br>
 You get betting tokens worth <b>2, 3, 3, 4, 5</b> every race. Drop them on squares: Win, Place, Show, the winner's group, or the side bets. <b>Each square holds one token, first come first served</b>, and everyone can see who's where.<br><br>
-Betting stays open while the horses run until any horse reaches the dashed halfway line, so waiting gives you better info but fewer squares. A hit pays <b>token × multiplier</b>. Red <span style="color:var(--red)">−$</span> squares charge you if they miss. Most cash after the last race wins.</div></div>`;}
+Betting stays open while the horses run until any horse crosses the <b style="color:#e0443c">red line</b> halfway down the track, so waiting gives you better info but fewer squares. A hit pays <b>token × multiplier</b>. Red <span style="color:var(--red)">−$</span> squares charge you if they miss. Most cash after the last race wins.<br><br>Before each race everyone picks <b>1 of 3 perks</b>, like extra tokens, insurance or double payouts. Everyone can see who picked what.</div></div>`;}
 function homeHTML(){
   let saved=null;try{saved=JSON.parse(localStorage.getItem('pf_host'))}catch(e){}
   return `<div class="card"><h2 style="margin-top:0">Host a table</h2><div class="note" style="margin-bottom:10px">You run the race and friends join from their phones. No accounts needed.</div>
@@ -471,9 +547,9 @@ function renderDock(){
   d.classList.remove('hide');
   const used=usedToks(myId);
   if(selTok!==null&&used.has(selTok))selTok=null;
-  if(selTok===null){const free=TOKENS.map((v,i)=>i).filter(i=>!used.has(i));selTok=free.length?free[free.length-1]:null;}
-  $('dockIn').innerHTML=`<div class="dtop"><span><span class="sw" style="background:${p.col}"></span>${esc(p.nick)} · <span class="cash ${p.cash<0?'neg':''}">${money(p.cash)}</span></span><span>${bettingOpen()?(selTok!==null?`Next drop: ${TOKENS[selTok]}-token`:'All tokens placed'):'Betting closed'}</span></div>
-  <div class="toks">${TOKENS.map((v,i)=>`<button class="tk ${used.has(i)?'used':''} ${i===selTok?'sel':''}" style="background:${p.col}" ${used.has(i)?'disabled':''} onclick="pickTok(${i})">${v}</button>`).join('')}</div>`;
+  if(selTok===null){const free=tokensFor(myId).map((v,i)=>i).filter(i=>!used.has(i));selTok=free.length?free[free.length-1]:null;}
+  $('dockIn').innerHTML=`<div class="dtop"><span><span class="sw" style="background:${p.col}"></span>${esc(p.nick)} · <span class="cash ${p.cash<0?'neg':''}">${money(p.cash)}</span></span><span>${bettingOpen()?(selTok!==null?`Next drop: ${tokensFor(myId)[selTok]}-token`:'All tokens placed'):'Betting closed'}</span></div>
+  <div class="toks">${tokensFor(myId).map((v,i)=>`<button class="tk ${used.has(i)?'used':''} ${i===selTok?'sel':''}" style="background:${p.col}" ${used.has(i)?'disabled':''} onclick="pickTok(${i})">${v}</button>`).join('')}</div>`;
 }
 
 // ================= Boot =================
