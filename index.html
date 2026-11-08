@@ -103,7 +103,7 @@ input{font:inherit;font-size:16px;background:var(--ink);color:var(--cream);borde
 <script>
 // ================= Rules & constants =================
 const H=[{k:'2·3',c:'#e05a5a'},{k:'4',c:'#f08a3c'},{k:'5',c:'#efc94c'},{k:'6',c:'#8fd16b'},{k:'7',c:'#4cc9b0'},{k:'8',c:'#5aa7e0'},{k:'9',c:'#8b7fe8'},{k:'10',c:'#d07ad6'},{k:'11·12',c:'#f2a7c3'}];
-const DIST=[6,6,7,7,7,7,7,6,6];          // spaces to the finish line
+const DIST=Array(9).fill(6);             // every horse runs the same 6-space track; rare numbers are long shots
 const HALF=i=>Math.ceil(DIST[i]/2);      // betting closes when any horse reaches its halfway mark
 const TOKENS=[2,3,3,4,5];                // each player's betting tokens, every race
 const STEP=1100;                         // ms between rolls
@@ -126,8 +126,8 @@ const PROPS=[
   ()=>{const x=pick([2,3,5,6]);return{k:'gate',a:[x],t:`The ${H[x].k} never leaves the gate`}},
   ()=>{const x=pick([0,1,2,6,7,8]);return{k:'last',a:[x],t:`The ${H[x].k} finishes dead last`}},
   ()=>{const xs=[...Array(9).keys()].sort(()=>Math.random()-.5).slice(0,2);return{k:'pair',a:xs,t:`Both the ${H[xs[0]].k} and the ${H[xs[1]].k} finish top 3`}},
-  ()=>({k:'long',t:'Marathon: the race takes 34+ rolls'}),
-  ()=>({k:'short',t:'Sprint: the race ends in 24 rolls or fewer'}),
+  ()=>({k:'long',t:'Marathon: the race takes 30+ rolls'}),
+  ()=>({k:'short',t:'Sprint: the race ends in 20 rolls or fewer'}),
   ()=>{const x=pick([3,5]);return{k:'beats',a:[x,4],t:`The ${H[x].k} finishes ahead of the 7`}},
 ];
 
@@ -146,8 +146,8 @@ function hits(sq,o){ // does square sq pay given outcome o?
     case 'gate':return pos[a[0]]===0;
     case 'last':return rk[8]===a[0];
     case 'pair':return rk.slice(0,3).includes(a[0])&&rk.slice(0,3).includes(a[1]);
-    case 'long':return n>=34;
-    case 'short':return n<=24;
+    case 'long':return n>=30;
+    case 'short':return n<=20;
     case 'beats':return rk.indexOf(a[0])<rk.indexOf(a[1]);
   }
   return false;
@@ -454,7 +454,7 @@ function finalHTML(){
   return `<div class="card center"><div style="font-size:46px">🏆</div><h2 style="margin-top:2px">${esc(G.roster[ids[0]]?.nick||'Nobody')} takes the purse!</h2></div>${settleHTML()}${playersHTML()}`;
 }
 function howHTML(){return `<div class="card"><h3 style="margin-top:0">How to play</h3><div class="note">
-Each race, two dice roll over and over and the horse matching the total moves one space (2·3 and 11·12 share a horse). Rare numbers have shorter tracks.<br><br>
+Each race, two dice roll over and over and the horse matching the total moves one space (2·3 and 11·12 share a horse). Every track is the same length, so rare numbers are real long shots, and the board pays them big.<br><br>
 You get betting tokens worth <b>2, 3, 3, 4, 5</b> every race. Drop them on squares: Win, Place, Show, the winner's group, or the side bets. <b>Each square holds one token, first come first served</b>, and everyone can see who's where.<br><br>
 Betting stays open while the horses run until any horse reaches the dashed halfway line, so waiting gives you better info but fewer squares. A hit pays <b>token × multiplier</b>. Red <span style="color:var(--red)">−$</span> squares charge you if they miss. Most cash after the last race wins.</div></div>`;}
 function homeHTML(){
