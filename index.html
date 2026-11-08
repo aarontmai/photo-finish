@@ -191,7 +191,7 @@ function hostWrite(next){
   broadcast({type:'state',G});render();
 }
 function hostNewGame(races){
-  hostWrite({game:Math.random().toString(36).slice(2,8),phase:'lobby',races:races||(G&&G.races)||4,race:0,roster:G&&G.phase!=='final'?{}:resetRoster(),board:null,claims:{},rolls:[],open:true,results:null});
+  hostWrite({game:Math.random().toString(36).slice(2,8),phase:'lobby',races:races||(G&&G.races)||4,race:0,buyin:(G&&G.buyin)||10,payout:(G&&G.payout)||'top3',roster:G&&G.phase!=='final'?{}:resetRoster(),board:null,claims:{},rolls:[],open:true,results:null});
 }
 function resetRoster(){const r={};if(G&&G.roster)for(const id in G.roster)r[id]={...G.roster[id],cash:0};return r;}
 function hostAddPlayer(id,nick){
@@ -237,6 +237,52 @@ function settle(s,pos,stamp){
 function hostNext(){if(G.race>=G.races){const s=clone(G);s.phase='final';hostWrite(s);}else hostOpenBetting();}
 function hostRestart(){const s=clone(G);s.phase='lobby';s.race=0;s.board=null;s.claims={};s.rolls=[];s.results=null;for(const id in s.roster)s.roster[id].cash=0;hostWrite(s);}
 function hostSetRaces(n){const s=clone(G);s.races=n;hostWrite(s);}
+function hostSetBuyin(v){v=Math.round(Math.max(0,Math.min(1000,+v||0))*100)/100;if(v===G.buyin)return;const s=clone(G);s.buyin=v;hostWrite(s);}
+function hostSetPayout(k){const s=clone(G);s.payout=k;hostWrite(s);}
+
+// ================= Settle up (the app never touches money) =================
+const PAYOUTS={winner:'Winner takes all',top3:'Top 3 split',prop:'Split by final cash'};
+const usd=n=>'$'+(Math.round(n*100)/100).toFixed(2).replace(/\.00$/,'');
+function payouts(){
+  const ids=Object.keys(G.roster),n=ids.length,b=G.buyin||0,pot=b*n,out={};
+  if(!n)return{pot,out};
+  const cash=id=>G.roster[id].cash;
+  const sorted=ids.slice().sort((a,c)=>cash(c)-cash(a));
+  if(G.payout==='prop'){
+    const min=Math.min(...ids.map(cash));const w=ids.map(id=>cash(id)-min);const tot=w.reduce((a,c)=>a+c,0);
+    ids.forEach((id,i)=>out[id]=tot>0?pot*w[i]/tot:b);
+  }else{
+    const shares=G.payout==='winner'?[1]:n===1?[1]:n===2?[.7,.3]:[.6,.3,.1];
+    let i=0;while(i<n){let j=i;while(j+1<n&&cash(sorted[j+1])===cash(sorted[i]))j++;
+      let sh=0;for(let k=i;k<=j;k++)sh+=shares[k]||0;sh/=(j-i+1);
+      for(let k=i;k<=j;k++)out[sorted[k]]=pot*sh;i=j+1;}
+  }
+  // round to cents, keep the pot exact
+  let sum=0;ids.forEach(id=>{out[id]=Math.round(out[id]*100)/100;sum+=out[id];});
+  const diff=Math.round((pot-sum)*100)/100;if(diff)out[sorted[0]]=Math.round((out[sorted[0]]+diff)*100)/100;
+  return{pot,out};
+}
+function transfers(out){ // fewest payments: biggest debtor pays biggest creditor
+  const b=G.buyin||0;const net=Object.keys(out).map(id=>({id,v:Math.round((out[id]-b)*100)}));
+  const cr=net.filter(x=>x.v>0).sort((a,c)=>c.v-a.v),db=net.filter(x=>x.v<0).map(x=>({id:x.id,v:-x.v})).sort((a,c)=>c.v-a.v);
+  const t=[];let i=0,j=0;
+  while(i<db.length&&j<cr.length){const amt=Math.min(db[i].v,cr[j].v);if(amt>0)t.push({from:db[i].id,to:cr[j].id,amt:amt/100});
+    db[i].v-=amt;cr[j].v-=amt;if(!db[i].v)i++;if(!cr[j].v)j++;}
+  return t;
+}
+function payoutNote(){return {winner:'Whoever has the most cash at the end takes the whole pot.',top3:'1st gets 60%, 2nd 30%, 3rd 10% (70/30 with two players). Ties split evenly.',prop:'The pot is split in proportion to final cash, measured from the lowest player, who gets nothing. Everyone tied means everyone gets their buy-in back.'}[G.payout];}
+function settleHTML(){
+  const b=G.buyin||0;const nm=id=>esc(G.roster[id]?.nick||'?');
+  if(!b)return `<div class="card note center">No buy-in was set, so it's just for bragging rights.</div>`;
+  const {pot,out}=payouts();const t=transfers(out);
+  const ids=Object.keys(out).sort((a,c)=>out[c]-out[a]);
+  return `<div class="card"><h2 style="margin-top:0">Settle up</h2>
+  <div class="note" style="margin-bottom:8px">${usd(b)} buy-in × ${ids.length} = <b>${usd(pot)} pot</b> · ${PAYOUTS[G.payout]}</div>
+  ${ids.map(id=>{const net=out[id]-b;return `<div class="res"><span><span class="sw" style="background:${G.roster[id].col}"></span>${nm(id)}${id===myId?' (you)':''}</span><span>${usd(out[id])} <b class="${net>0?'pos':net<0?'neg':''}">(${net>=0?'+':'−'}${usd(Math.abs(net))})</b></span></div>`}).join('')}
+  <h3>Payments</h3>
+  ${t.length?t.map(x=>`<div class="res" style="${x.from===myId||x.to===myId?'font-weight:800':''}"><span>${nm(x.from)} → ${nm(x.to)}</span><b>${usd(x.amt)}</b></div>`).join(''):'<div class="note">Everyone broke even. Nobody owes anything.</div>'}
+  <div class="note" style="margin-top:8px">The app doesn't move any money. Settle up with each other however you like.</div></div>`;
+}
 
 // ================= Player actions (routed to host) =================
 function send(m){if(isHost)hostHandle(myId,m);else if(hostConn&&hostConn.open){try{hostConn.send(m)}catch(e){}}}
@@ -381,7 +427,7 @@ function boardHTML(){
 }
 function playersHTML(){
   const ids=Object.keys(G.roster).sort((a,b)=>G.roster[b].cash-G.roster[a].cash);
-  return `<div class="card"><h3 style="margin-top:0">Table</h3>${ids.map(id=>{const p=G.roster[id];const n=Object.values(G.claims||{}).filter(c=>c.id===id).length;
+  return `<div class="card"><h3 style="margin-top:0">Table${G.buyin?` · ${usd(G.buyin*Object.keys(G.roster).length)} pot`:''}</h3>${ids.map(id=>{const p=G.roster[id];const n=Object.values(G.claims||{}).filter(c=>c.id===id).length;
   return `<div class="pl ${online[id]?'':'off'}"><span><span class="sw" style="background:${p.col}"></span>${esc(p.nick)}${id===myId?' (you)':''}${G.phase!=='lobby'&&G.phase!=='final'?` <span class="note">· ${n}/${TOKENS.length} tokens out</span>`:''}</span><span class="cash ${p.cash<0?'neg':''}">${money(p.cash)}</span></div>`}).join('')}</div>`;
 }
 function resultsHTML(){
@@ -396,12 +442,16 @@ function lobbyHTML(){
   return `${isHost?`<div class="card center"><div class="note">Friends join with this code, or the link</div><div class="code">${esc(code)}</div>
   <div class="note" style="word-break:break-all;margin-bottom:8px">${esc(shareURL())}</div><button style="width:100%" onclick="copyLink(this)">Copy invite link</button>
   <h3>Races</h3><div class="row">${[3,4,5,6].map(n=>`<button class="grow ${G.races===n?'sel':''}" onclick="hostSetRaces(${n})">${n}</button>`).join('')}</div>
-  <div class="note" style="margin-top:8px">Keep this page open while you play. Your phone runs the table.</div></div>`:`<div class="card center note">${G.races} races. Waiting for the host to start…</div>`}
+  <h3>Buy-in per player</h3><div class="row">${[0,5,10,20].map(v=>`<button class="grow ${G.buyin===v?'sel':''}" onclick="hostSetBuyin(${v})">${v?'$'+v:'None'}</button>`).join('')}</div>
+  <div class="row" style="margin-top:6px"><input type="number" inputmode="decimal" min="0" step="1" placeholder="Custom amount" onchange="hostSetBuyin(this.value)"></div>
+  <h3>Payout</h3><div class="row" style="flex-wrap:wrap">${Object.keys(PAYOUTS).map(k=>`<button class="grow ${G.payout===k?'sel':''}" onclick="hostSetPayout('${k}')">${PAYOUTS[k]}</button>`).join('')}</div>
+  <div class="note" style="margin-top:6px">${payoutNote()}</div>
+  <div class="note" style="margin-top:8px">Keep this page open while you play. Your phone runs the table.</div></div>`:`<div class="card center note">${G.races} races · ${G.buyin?usd(G.buyin)+' buy-in · '+PAYOUTS[G.payout]:'no buy-in'}<br>Waiting for the host to start…</div>`}
   ${playersHTML()}${howHTML()}`;
 }
 function finalHTML(){
   const ids=Object.keys(G.roster).sort((a,b)=>G.roster[b].cash-G.roster[a].cash);
-  return `<div class="card center"><div style="font-size:46px">🏆</div><h2 style="margin-top:2px">${esc(G.roster[ids[0]]?.nick||'Nobody')} takes the purse!</h2></div>${playersHTML()}`;
+  return `<div class="card center"><div style="font-size:46px">🏆</div><h2 style="margin-top:2px">${esc(G.roster[ids[0]]?.nick||'Nobody')} takes the purse!</h2></div>${settleHTML()}${playersHTML()}`;
 }
 function howHTML(){return `<div class="card"><h3 style="margin-top:0">How to play</h3><div class="note">
 Each race, two dice roll over and over and the horse matching the total moves one space (2·3 and 11·12 share a horse). Rare numbers have shorter tracks.<br><br>
