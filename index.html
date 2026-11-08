@@ -114,7 +114,7 @@ const DIST=Array(9).fill(10);            // every horse runs the same 10-space t
 const HALF=i=>Math.ceil(DIST[i]/2);      // betting closes when any horse reaches the red line
 const LATE=i=>Math.ceil(DIST[i]*0.8);    // Late Bird perk: still betting until this line
 const TOKENS=[2,3,3,4,5];                // each player's betting tokens, every race
-const STEP=800;                         // ms between rolls
+const STEP=1600, STEP_FAST=800;          // slow rolls while bets are open, quicker once betting closes                         // ms between rolls
 const PCOL=['#e8b54a','#5ad1e8','#ff8fb1','#b4e86b','#c89bff','#ff9f5a','#7fe0c0','#f2f2f2'];
 const COLS={w:'Win',p:'Place',s:'Show'},TOPN={w:1,p:2,s:3};
 const GROUPS={L:{label:'Low',hs:[0,1,2]},M:{label:'Mid',hs:[3,4,5]},X:{label:'High',hs:[6,7,8]}};
@@ -267,15 +267,16 @@ function hostPickPerk(id,k){
 }
 function hostStartRace(){const s=clone(G);s.phase='race';s.open=true;s.open2=true;
   for(const id in s.roster)if(!s.perks[id]&&s.offers[id])s.perks[id]=pick(s.offers[id]); // undecided players get a random perk
-  hostWrite(s);clearInterval(raceTimer);raceTimer=setInterval(hostRoll,STEP);}
+  hostWrite(s);clearTimeout(raceTimer);raceTimer=setTimeout(hostRoll,STEP);}
 function hostRoll(){
-  if(!G||G.phase!=='race'){clearInterval(raceTimer);return;}
+  if(!G||G.phase!=='race'){clearTimeout(raceTimer);return;}
   const s=clone(G);const a=d6(),b=d6(),h=horseOf(a+b);s.rolls.push(a*10+b);
   const {pos,stamp}=replay(s.rolls);
   if(s.open&&pos.some((p,i)=>p>=HALF(i)))s.open=false;
   if(s.open2&&pos.some((p,i)=>p>=LATE(i)))s.open2=false;
-  if(pos[h]>=DIST[h]){clearInterval(raceTimer);s.open=false;s.open2=false;settle(s,pos,stamp);}
+  if(pos[h]>=DIST[h]){s.open=false;s.open2=false;settle(s,pos,stamp);}
   hostWrite(s);
+  if(s.phase==='race')raceTimer=setTimeout(hostRoll,s.open||s.open2?STEP:STEP_FAST);
 }
 function settle(s,pos,stamp){
   const o=outcomeOf(pos,stamp,s.rolls.length);const lines=[];
@@ -401,7 +402,7 @@ function startHost(resume){
   openHostPeer();
   if(!G)hostNewGame(4);
   hostAddPlayer(myId,myNick);online={[myId]:true};
-  if(G.phase==='race'){clearInterval(raceTimer);raceTimer=setInterval(hostRoll,STEP);}
+  if(G.phase==='race'){clearTimeout(raceTimer);raceTimer=setTimeout(hostRoll,STEP);}
   render();
 }
 let retryT=null;
